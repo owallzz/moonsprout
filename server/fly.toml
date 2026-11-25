@@ -1,27 +1,39 @@
-# Fly.io app for the official lobby (plan section 2.11). Example only: not deployed by the project.
-#   fly launch --copy-config --no-deploy   (pick your own app name), then fly deploy
-app = "mppm-server-example"
-primary_region = "iad"
+# Fly.io app for the official lobby server (https://moonsprout-lobby.fly.dev).
+# Forks: pick your own app name, then `fly launch --copy-config --no-deploy` and `fly deploy --ha=false`.
+#
+# One machine only (`--ha=false`): sessions and join codes live in its memory, so a second machine
+# would split the lobbies. It stops when no one is connected and starts again on the next request.
+# Every game in a lobby or a match keeps a WebSocket open (a ping every 20 s), so the machine stays up
+# while anyone plays. If it stops anyway, a running match goes on peer to peer.
+app = "moonsprout-lobby"
+primary_region = "dfw"
+kill_signal = "SIGTERM"
+kill_timeout = "5s"
 
 [build]
   dockerfile = "Dockerfile"
 
 [env]
   RUST_LOG = "mppm_server=info,warn"
-  # Cloudflare Realtime TURN credentials (relay mode cloudflare) wait for the libjuice-against-
-  # Cloudflare-TURN spike; the server refuses to start with this mode until then.
-  # MPPM_RELAY_MODE = "cloudflare"
+  # Relay: none for now. Players connect directly or by ICE hole punching with the STUN server below.
+  # A relay for players behind strict NATs needs a dedicated IPv4 (UDP) or an external TURN service.
+  MPPM_RELAY_MODE = "none"
 
 [experimental]
   # Appended to the image ENTRYPOINT (which already binds 0.0.0.0:8080): Fly sets Fly-Client-IP.
-  cmd = ["--trust-proxy"]
+  cmd = ["--trust-proxy", "--stun", "stun:stun.cloudflare.com:3478"]
 
 [http_service]
   internal_port = 8080
   force_https = true
-  auto_stop_machines = "off"
+  auto_stop_machines = "stop"
   auto_start_machines = true
-  min_machines_running = 1
+  min_machines_running = 0
+
+  [http_service.concurrency]
+    type = "connections"
+    soft_limit = 1000
+    hard_limit = 1500
 
   [[http_service.checks]]
     grace_period = "5s"
@@ -33,8 +45,3 @@ primary_region = "iad"
 [[vm]]
   size = "shared-cpu-1x"
   memory = "256mb"
-
-# Phase 2 (leaderboards in SQLite). Create it with: fly volumes create mppm_data --size 1 --region iad
-[mounts]
-  source = "mppm_data"
-  destination = "/data"

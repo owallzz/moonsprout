@@ -177,9 +177,10 @@ in an online run.
 
 **Settings** (Settings › ONLINE, [SETTINGS.md](../launcher/SETTINGS.md) section 18):
 `online.serverUrl` (alias `online.server_url`, the plan's spelling; environment `MPPM_SERVER_URL`) and
-`online.playerName`. The default server is the CMake cache string `MPPM_DEFAULT_SERVER_URL`, **empty
-in part 1**: the official server is not deployed yet, so the Multiplayer window says "No lobby
-server is set. Choose one in Settings › Online." instead of contacting a domain nobody runs.
+`online.playerName`. The default server is the CMake cache string `MPPM_DEFAULT_SERVER_URL`, the
+official lobby `https://moonsprout-lobby.fly.dev` (Fly.io, `server/fly.toml`: one machine that stops
+when idle). Configure with `-DMPPM_DEFAULT_SERVER_URL=` (empty) for a build without a default: its
+Multiplayer window says "No lobby server is set. Choose one in Settings › Online."
 
 **Server** (`mppm-server --help`, [server/README.md](../../server/README.md)):
 `--bind` (default `127.0.0.1:8080`), `--port-file`, `--log-file`, `--relay-mode none|static|shared-secret|builtin|cloudflare`
@@ -642,8 +643,8 @@ Part 2 of M5.3b, or the user (accounts and deployments):
 1. **The Cloudflare TURN spike** (plan 2.11 "Early check"): a libjuice agent against
    `turn.cloudflare.com` carrying ENet traffic; needs a Cloudflare account and API token. Part 1
    proved the same client path against libjuice's own TURN server on 127.0.0.1.
-2. **The Fly.io deployment** of `mppm-server` with the committed `fly.toml` and `Dockerfile`, the
-   domain, TLS at the edge, `MPPM_DEFAULT_SERVER_URL` set to the official URL, the deploy on tag,
+2. **The Fly.io deployment**: done 2026-11-25 (`moonsprout-lobby.fly.dev`, relay mode `none` with
+   Cloudflare STUN, scale to zero, `MPPM_DEFAULT_SERVER_URL` set). Still open: a domain, the deploy on tag,
    nightly SQLite backups to R2, and `relay=cloudflare` credential minting.
 3. **Real two-machine tests**: matrix A, real NAT and WAN, 30-minute Tier 0 sessions and a 30-minute
    4-peer 2v2, one session through Cloudflare TURN and one through a self-hosted `docker compose`

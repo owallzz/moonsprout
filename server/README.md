@@ -103,7 +103,9 @@ deploys them automatically.
 
   Open TCP 8080 (or the TLS proxy's 443), UDP and TCP 3478 and UDP 49152-65535 for coturn. Uncomment
   the Caddy service for automatic HTTPS, then use `https://play.example.org` as the game's server URL.
-- [`fly.toml`](fly.toml): a Fly.io app (`fly launch --copy-config`, then `fly deploy`). Fly
+- [`fly.toml`](fly.toml): the official lobby, `moonsprout-lobby` on Fly.io (one machine that stops
+  when idle; forks pick their own app name, `fly launch --copy-config --no-deploy`, then
+  `fly deploy --ha=false`). Fly
   terminates TLS. UDP relaying on Fly needs a dedicated IPv4 address and is not configured here; use
   `shared-secret` with an external coturn, or `builtin` on a VPS.
 

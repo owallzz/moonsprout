@@ -15,7 +15,7 @@ file(CONFIGURE OUTPUT ${CMAKE_BINARY_DIR}/generated/mppm_build_flags.h
 
 # ---- The default lobby server (the same cache string as CMakeLists.txt, which defines it after this
 # fragment) for mppm::online in port/net/session/session.cpp. Empty until the official server exists.
-set(MPPM_DEFAULT_SERVER_URL "" CACHE STRING "Default lobby server URL for online play (empty = none)")
+set(MPPM_DEFAULT_SERVER_URL "https://moonsprout-lobby.fly.dev" CACHE STRING "Default lobby server URL for online play (empty = none)")
 set_property(SOURCE ${CMAKE_SOURCE_DIR}/port/net/session/session.cpp APPEND PROPERTY
         COMPILE_DEFINITIONS "MPPM_DEFAULT_SERVER_URL=\"${MPPM_DEFAULT_SERVER_URL}\"")
 

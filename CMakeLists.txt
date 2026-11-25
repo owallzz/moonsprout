@@ -413,5 +413,5 @@ include(cmake/mppm_net_transport.cmake OPTIONAL) # transport package: ENet, libj
 include(cmake/mppm_net_lobby.cmake OPTIONAL)     # server package: borealis::ws for the lobby client, its test
 include(cmake/mppm_net_session.cmake OPTIONAL)   # lockstep package: session self-test, build-flags header
 # Default lobby server for online.serverUrl; empty until the official server is deployed.
-set(MPPM_DEFAULT_SERVER_URL "" CACHE STRING "Default lobby server URL for online play (empty = none)")
+set(MPPM_DEFAULT_SERVER_URL "https://moonsprout-lobby.fly.dev" CACHE STRING "Default lobby server URL for online play (empty = none)")
 target_compile_definitions(mppm_launcher PRIVATE "MPPM_DEFAULT_SERVER_URL=\"${MPPM_DEFAULT_SERVER_URL}\"")

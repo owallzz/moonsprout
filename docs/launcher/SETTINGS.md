@@ -1406,7 +1406,7 @@ notices, end messages), `res/rml/online.rcss`.
 | Key | Type | Default | Row | Help | Class |
 |---|---|---|---|---|---|
 | `online.playerName` | string, 0-24 code points (control characters removed, trimmed) | `""` (shown to others as "Player") | **Player Name** | "Shown to the other players in online games." | L, RT |
-| `online.serverUrl` (alias `online.server_url`, the plan's spelling) | string (trimmed); `http(s)://`, `ws(s)://` | the CMake cache string `MPPM_DEFAULT_SERVER_URL`, a compile definition of `mppm_launcher`; empty in part 1 | **Lobby Server** | "The server that runs lobbies and join codes. Every relay address comes from it. Use your own to play on a self-hosted server." plus "Default: none yet" while the build has no default | L, RT; env `MPPM_SERVER_URL` |
+| `online.serverUrl` (alias `online.server_url`, the plan's spelling) | string (trimmed); `http(s)://`, `ws(s)://` | the CMake cache string `MPPM_DEFAULT_SERVER_URL`, a compile definition of `mppm_launcher`; `https://moonsprout-lobby.fly.dev` | **Lobby Server** | "The server that runs lobbies and join codes. Every relay address comes from it. Use your own to play on a self-hosted server." plus "Default: none yet" while the build has no default | L, RT; env `MPPM_SERVER_URL` |
 
 - Both rows are text rows (`ui::TextField`: a placeholder while empty, "Player" and "None"); Y (or
   the key bound to it) resets them, as every row. The help's "Default: ..." line shows once a row
