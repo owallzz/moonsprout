@@ -703,6 +703,13 @@ void JFWDisplay::calcCombinationRatio()
 {
 	u32 vidInterval          = JUTVideo::getVideoInterval();
 	s32 doubledFrameDuration = mFrameDuration * 2;
+#if TARGET_PC
+	// The loop below never ends for an interval of 0 (or one that is negative as s32); JUTVideo
+	// guards against it, this is the backstop. 670000 is JUTVideo's initial interval.
+	if ((s32)vidInterval <= 0) {
+		vidInterval = 670000;
+	}
+#endif
 
 	s32 i = vidInterval;
 	for (; i < doubledFrameDuration; i += vidInterval) { }

@@ -150,6 +150,8 @@ void reschedule(std::unique_lock<std::mutex>& lk, HostThread* self)
 		if (next != self) {
 			next->cv.notify_one();
 		}
+	} else if (g_irqPending.load(std::memory_order_relaxed)) {
+		g_timerCv.notify_one(); // idle with interrupts still pending: the timer delivers them now
 	}
 	if (self == nullptr || next == self) {
 		return;
@@ -300,8 +302,17 @@ void timerMain()
 		// Sleep until the next retrace or the earliest alarm.
 		auto wake = nextRetrace;
 		const OSTime now = OSGetTime();
+		// Due alarms already flagged in g_irqPending wait for the current game thread's next safe
+		// point. Waking for them again would spin here with g_lock held (wait_until returns at once),
+		// and the game thread needs g_lock to reach that safe point: on Windows, whose SRW locks
+		// hand the lock straight back to the spinning thread, it never gets it and the game freezes.
+		// With no game thread current the timer delivers them itself below, so they still count.
+		const bool flagged = g_irqPending.load(std::memory_order_relaxed) && g_current != nullptr;
 		for (OSAlarm* a : g_alarms) {
 			const OSTime delta = a->fire - now;
+			if (delta <= 0 && flagged) {
+				continue;
+			}
 			const auto at = clock::now() + std::chrono::nanoseconds(delta <= 0 ? 0 : (s64)((double)delta * 1e9 / OS_TIMER_CLOCK));
 			wake          = std::min(wake, at);
 		}
@@ -684,6 +695,8 @@ void OSExitThread(void* val)
 		next->state = HState::Running;
 		g_last      = next;
 		next->cv.notify_one();
+	} else if (g_irqPending.load(std::memory_order_relaxed)) {
+		g_timerCv.notify_one(); // idle with interrupts still pending: the timer delivers them now
 	}
 	lk.unlock();
 	// The host thread ends here; its OSThread storage belongs to the game.

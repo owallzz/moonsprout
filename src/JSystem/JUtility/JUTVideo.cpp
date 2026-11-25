@@ -86,7 +86,20 @@ void JUTVideo::preRetraceProc(u32 p1)
 
 	OSTick tick    = OSGetTick();
 	JUTXfb* xfb    = JUTXfb::getManager();
+#if TARGET_PC
+	// The host tick is not the GameCube's free-running counter: it comes from Aurora's game clock,
+	// which stands still while Aurora holds the game (hidden or unpresentable window) and only
+	// advances in 100 ns steps on Windows (QueryPerformanceCounter). Retraces keep coming from the
+	// scheduler's timer meanwhile, and late ones are delivered back to back (port/sdk/os_thread.cpp),
+	// so two can read the same tick. An interval of 0 (or a negative one) makes the loop in
+	// JFWDisplay::calcCombinationRatio run forever: keep the last real interval instead.
+	const s32 interval = (s32)(tick - (OSTick)sVideoLastTick);
+	if (interval > 0) {
+		sVideoInterval = interval;
+	}
+#else
 	sVideoInterval = tick - sVideoLastTick;
+#endif
 	sVideoLastTick = tick;
 
 	if (!xfb) {

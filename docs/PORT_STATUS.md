@@ -77,6 +77,15 @@ Screenshot with `magick import -display :99 -window root shot.png`; input with
 `DISPLAY=:99 xdotool windowfocus <win>; DISPLAY=:99 xdotool key Return`. Aurora names the main
 thread "Main thread", so match the process with `pgrep -f '^./build-pc/mppm'`, not `-x mppm`.
 
+Input without window focus or system-wide key events (any OS, including a hidden Windows desktop):
+`MPPM_TEST_PAD="<sec>:<input>[:<ms>];..."` drives a virtual SDL gamepad, pressing each input that
+many seconds after the first launcher frame (held 100 ms unless `:<ms>` is given). Inputs are SDL
+gamepad names (`a`, `b`, `x`, `y`, `start`, `dpup`, `dpleft`, ...) or a stick pushed all the way
+(`leftx+`, `lefty-`, ...). Keep physical controllers out with SDL's hints (`SDL_XINPUT_ENABLED=0`,
+`SDL_JOYSTICK_RAWINPUT=0`, `SDL_JOYSTICK_HIDAPI=0`, `SDL_JOYSTICK_WGI=0`, `SDL_JOYSTICK_GAMEINPUT=0`,
+`SDL_JOYSTICK_DIRECTINPUT=0`) and add `--cvar input.backgroundInput=true` when the window has no
+focus. Example, Play on the start menu then skip the take-off: `MPPM_TEST_PAD="12:a;15:a"`.
+
 ## How resource data is handled on the host
 
 - **`BE(T)` fields / `BE_READ()`** (types.h, port/include/p2_be.h): structs read straight from

@@ -27,6 +27,9 @@
 
 #include <SDL3/SDL_events.h>
 #include <SDL3/SDL_filesystem.h>
+#include <SDL3/SDL_gamepad.h>
+#include <SDL3/SDL_init.h>
+#include <SDL3/SDL_joystick.h>
 #include <SDL3/SDL_timer.h>
 #include <SDL3/SDL_video.h>
 
@@ -148,6 +151,12 @@ void fill_aurora_config(AuroraConfig& config) {
     config.allowCpuAdapter               = s.video.allowCpuAdapter.get();
     config.windowWidth                   = static_cast<uint32_t>(s.video.windowWidth.get());
     config.windowHeight                  = static_cast<uint32_t>(s.video.windowHeight.get());
+    // No saved position: let SDL centre the window (Aurora maps a negative position to
+    // SDL_WINDOWPOS_UNDEFINED). Left at 0 it is an explicit position for the client area, and on
+    // Windows that puts the title bar above the top of the screen. A relaunch restores the old
+    // position itself (live_apply init).
+    config.windowPosX                    = -1;
+    config.windowPosY                    = -1;
     config.logLevel                      = aurora_log_level(s.tools.logLevel.get());
     // The window maps only once the start menu has a frame to present (present_first_frame), not
     // as an uncleared black surface while the fonts and the menu load.
@@ -415,6 +424,123 @@ void test_set() {
     }
 }
 
+// Test hook (raw environment): MPPM_TEST_PAD="<sec>:<input>[:<ms>];..." drives a virtual SDL
+// gamepad, so a run can be played with no window focus and no system-wide input (a hidden desktop,
+// a headless machine). Each step presses <input> that many seconds after the first launcher frame
+// and holds it <ms> (default 100). <input> is an SDL gamepad button name (a, b, x, y, start, back,
+// dpup, dpdown, dpleft, dpright, leftshoulder, rightshoulder, ...) or an axis pushed all the way:
+// leftx+, leftx-, lefty+, lefty-, rightx+, ..., lefttrigger, righttrigger. The pad is the only
+// controller when physical ones are kept out with SDL's hints (SDL_XINPUT_ENABLED=0 and so on);
+// pair it with --cvar input.backgroundInput=true when the window can't have focus.
+void test_pad() {
+    struct Step {
+        uint64_t atMs;
+        uint64_t holdMs;
+        std::string input;
+        int button = -1; // SDL_GamepadButton, or -1 for an axis
+        int axis   = -1; // SDL_GamepadAxis
+        Sint16 value       = 0;
+        bool down          = false;
+        uint64_t pressedAt = 0;
+    };
+    static std::vector<Step> steps = [] {
+        std::vector<Step> out;
+        const char* env = std::getenv("MPPM_TEST_PAD");
+        std::string_view rest = env != nullptr ? env : "";
+        while (!rest.empty()) {
+            const size_t end = rest.find(';');
+            const std::string item(rest.substr(0, end));
+            rest = end == std::string_view::npos ? std::string_view{} : rest.substr(end + 1);
+            const size_t c1 = item.find(':');
+            if (c1 == std::string::npos) {
+                if (!item.empty()) {
+                    std::fprintf(stderr, "mppm: test: MPPM_TEST_PAD item '%s' ignored\n", item.c_str());
+                }
+                continue;
+            }
+            const size_t c2 = item.find(':', c1 + 1);
+            Step s;
+            s.atMs   = static_cast<uint64_t>(std::atof(item.substr(0, c1).c_str()) * 1000.0);
+            s.input  = item.substr(c1 + 1, c2 == std::string::npos ? std::string::npos : c2 - c1 - 1);
+            s.holdMs = c2 == std::string::npos ? 100 : std::strtoull(item.c_str() + c2 + 1, nullptr, 10);
+            std::string name = s.input;
+            char sign        = 0;
+            if (!name.empty() && (name.back() == '+' || name.back() == '-')) {
+                sign = name.back();
+                name.pop_back();
+            }
+            const SDL_GamepadButton button = SDL_GetGamepadButtonFromString(name.c_str());
+            const SDL_GamepadAxis axis     = SDL_GetGamepadAxisFromString(name.c_str());
+            if (sign == 0 && button != SDL_GAMEPAD_BUTTON_INVALID) {
+                s.button = button;
+            } else if (axis != SDL_GAMEPAD_AXIS_INVALID) {
+                s.axis  = axis;
+                s.value = sign == '-' ? SDL_JOYSTICK_AXIS_MIN : SDL_JOYSTICK_AXIS_MAX;
+            } else {
+                std::fprintf(stderr, "mppm: test: MPPM_TEST_PAD input '%s' unknown\n", s.input.c_str());
+                continue;
+            }
+            out.push_back(std::move(s));
+        }
+        return out;
+    }();
+    static SDL_Joystick* pad = nullptr;
+    static uint64_t startMs  = 0;
+    if (steps.empty()) {
+        return;
+    }
+    if (pad == nullptr) {
+        SDL_InitSubSystem(SDL_INIT_JOYSTICK | SDL_INIT_GAMEPAD);
+        SDL_VirtualJoystickDesc desc;
+        SDL_INIT_INTERFACE(&desc);
+        desc.type        = SDL_JOYSTICK_TYPE_GAMEPAD;
+        desc.naxes       = SDL_GAMEPAD_AXIS_COUNT;
+        desc.nbuttons    = SDL_GAMEPAD_BUTTON_COUNT;
+        desc.axis_mask   = (1u << SDL_GAMEPAD_AXIS_COUNT) - 1u;
+        desc.button_mask = (1u << SDL_GAMEPAD_BUTTON_COUNT) - 1u;
+        desc.name        = "mppm test pad";
+        const SDL_JoystickID id = SDL_AttachVirtualJoystick(&desc);
+        pad = id != 0 ? SDL_OpenJoystick(id) : nullptr;
+        if (pad == nullptr) {
+            std::fprintf(stderr, "mppm: test: virtual pad unavailable: %s\n", SDL_GetError());
+            steps.clear();
+            return;
+        }
+        startMs = SDL_GetTicks();
+        std::fprintf(stderr, "mppm: test: virtual pad attached (%zu steps)\n", steps.size());
+        return;
+    }
+    const uint64_t elapsed = SDL_GetTicks() - startMs;
+    for (auto it = steps.begin(); it != steps.end();) {
+        Step& s = *it;
+        if (!s.down) {
+            if (elapsed >= s.atMs) { // held from the frame it is due, for at least one frame
+                s.down      = true;
+                s.pressedAt = elapsed;
+                if (s.button >= 0) {
+                    SDL_SetJoystickVirtualButton(pad, s.button, true);
+                } else {
+                    SDL_SetJoystickVirtualAxis(pad, s.axis, s.value);
+                }
+                std::fprintf(stderr, "mppm: test: pad %s at %llu ms\n", s.input.c_str(),
+                             static_cast<unsigned long long>(elapsed));
+            }
+            ++it;
+            continue;
+        }
+        if (elapsed < s.pressedAt + s.holdMs) {
+            ++it;
+            continue;
+        }
+        if (s.button >= 0) {
+            SDL_SetJoystickVirtualButton(pad, s.button, false);
+        } else {
+            SDL_SetJoystickVirtualAxis(pad, s.axis, 0);
+        }
+        it = steps.erase(it);
+    }
+}
+
 void update() {
     if (!sInitialized) {
         return;
@@ -423,6 +549,7 @@ void update() {
     reveal_window(); // safety net: never stay hidden past a frame
     test_drop();
     test_set();
+    test_pad();
     ui::update();
     integration::update();
     scene::update();
