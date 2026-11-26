@@ -98,8 +98,13 @@ On Linux, install the SDL3 build dependencies first. For Ubuntu 24.04:
 sudo apt-get install ninja-build clang lld libvulkan-dev libx11-xcb-dev libxi-dev libxrandr-dev \
   libxinerama-dev libxcursor-dev libxss-dev libxtst-dev libxfixes-dev libasound2-dev libpulse-dev \
   libudev-dev libdbus-1-dev libdecor-0-dev libpipewire-0.3-dev libwayland-dev libxkbcommon-dev \
-  libcurl4-openssl-dev
+  libcurl4-openssl-dev libssl-dev
 ```
+
+Online play needs a libcurl with WebSocket (`wss://`) support. Ubuntu 24.04's has none, so the build
+then fetches and builds its own libcurl against OpenSSL (hence `libssl-dev`); a distribution whose
+libcurl has it, such as Fedora, uses the system one. The configure stops with an error if neither
+works.
 
 On Windows, install Visual Studio 2022 or newer with the **Desktop development with C++** workload
 and its **C++ Clang tools** component, open a **Developer PowerShell**, and configure with

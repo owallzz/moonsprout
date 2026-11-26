@@ -84,8 +84,39 @@ set(BOREALIS_ENABLE_NET OFF CACHE BOOL "" FORCE)
 set(BOREALIS_ENABLE_CRASH OFF CACHE BOOL "" FORCE)
 set(BOREALIS_ENABLE_SENTRY OFF CACHE BOOL "" FORCE)
 set(BOREALIS_ENABLE_DISCORD OFF CACHE BOOL "" FORCE)
-set(BOREALIS_CURL_PROVIDER "system" CACHE STRING "" FORCE)
+# Linux: "auto" uses the system libcurl only if it has HTTPS, HTTP/2 and wss://, and otherwise builds the
+# vendored curl (extern/borealis/cmake/BorealisCurl.cmake, statically, against the system OpenSSL).
+# Ubuntu 24.04's libcurl (the release runner) has no WebSocket support, so it gets the vendored one.
+set(BOREALIS_CURL_PROVIDER "auto" CACHE STRING "" FORCE)
+# Link that curl's OpenSSL statically when the static libraries exist (Ubuntu's libssl-dev has them), so
+# the release binary does not need the player's libssl.so.3: Fedora 45 and later default to OpenSSL 4
+# (libssl.so.4). Certificates still come from the system (borealis looks up the distribution's CA bundle).
+if (CMAKE_SYSTEM_NAME STREQUAL "Linux" AND NOT DEFINED OPENSSL_USE_STATIC_LIBS)
+    find_library(MPPM_LIBSSL_STATIC NAMES libssl.a)
+    find_library(MPPM_LIBCRYPTO_STATIC NAMES libcrypto.a)
+    if (MPPM_LIBSSL_STATIC AND MPPM_LIBCRYPTO_STATIC)
+        set(OPENSSL_USE_STATIC_LIBS TRUE)
+    endif ()
+endif ()
 add_subdirectory(extern/borealis EXCLUDE_FROM_ALL)
+if (OPENSSL_USE_STATIC_LIBS AND OPENSSL_SSL_LIBRARY AND NOT OPENSSL_SSL_LIBRARY MATCHES "\\.a$")
+    message(WARNING "OpenSSL is cached as ${OPENSSL_SSL_LIBRARY}, not the static library: the binary will need "
+            "libssl.so. Configure a fresh build directory (or pass -U 'OPENSSL*') for a release-like build.")
+endif ()
+
+# Online play needs a real WebSocket backend for the lobby client. Without one, borealis only warns and
+# builds src/ws/no_backend.cpp, whose connect always fails (how v0.1.0-rc.3's Linux builds shipped
+# unable to reach the lobby). Make that a configure error; turn the option off only for a build that
+# deliberately has no online play.
+option(MPPM_REQUIRE_WEBSOCKET "Fail the configure when borealis::ws has no WebSocket backend" ON)
+if (MPPM_REQUIRE_WEBSOCKET)
+    get_target_property(_mppm_ws_sources borealis_ws SOURCES)
+    if (NOT _mppm_ws_sources OR "${_mppm_ws_sources}" MATCHES "no_backend\\.cpp")
+        message(FATAL_ERROR "borealis::ws has no WebSocket backend, so online play could not reach the lobby. "
+                "On Linux this needs a libcurl with wss:// or OpenSSL development files for the vendored curl "
+                "(BOREALIS_CURL_PROVIDER=auto). Pass -DMPPM_REQUIRE_WEBSOCKET=OFF only for a build without online play.")
+    endif ()
+endif ()
 
 find_package(Threads REQUIRED)
 

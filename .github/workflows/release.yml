@@ -56,7 +56,7 @@ jobs:
           sudo apt-get update
           sudo apt-get -y install ninja-build clang lld libvulkan-dev libx11-xcb-dev libxi-dev libxrandr-dev \
             libxinerama-dev libxcursor-dev libxss-dev libxtst-dev libxfixes-dev libasound2-dev libpulse-dev libudev-dev libdbus-1-dev \
-            libdecor-0-dev libpipewire-0.3-dev libwayland-dev libxkbcommon-dev libcurl4-openssl-dev
+            libdecor-0-dev libpipewire-0.3-dev libwayland-dev libxkbcommon-dev libcurl4-openssl-dev libssl-dev
           curl -fsSL -o /usr/local/bin/linuxdeploy \
             https://github.com/linuxdeploy/linuxdeploy/releases/download/1-alpha-20251107-1/linuxdeploy-x86_64.AppImage
           chmod +x /usr/local/bin/linuxdeploy
@@ -64,10 +64,23 @@ jobs:
         run: cmake -S . -B build-pc -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
       - name: Build
         run: cmake --build build-pc --target mppm
+      # rc.3 shipped Linux builds whose lobby client had no WebSocket backend (borealis fell back to
+      # src/ws/no_backend.cpp). The configure now fails on that too; this checks the binary itself.
+      - name: Check the WebSocket backend
+        run: |
+          tools/release/check-websocket.sh build-pc/mppm
+          readelf -d build-pc/mppm | grep NEEDED
       - name: Check the version
         run: grep -F "\"${{ needs.meta.outputs.version }}\"" build-pc/generated/mppm_version.h
       - name: Package
         run: tools/release/package-linux.sh "${{ needs.meta.outputs.version }}" build-pc dist
+      - name: Check the packaged binaries
+        run: |
+          t=$(mktemp -d) app=$(realpath dist/*.AppImage)
+          tar -C "$t" -xzf dist/*.tar.gz
+          tools/release/check-websocket.sh "$t/Moonsprout/moonsprout"
+          (cd "$t" && "$app" --appimage-extract usr/bin/moonsprout >/dev/null)
+          tools/release/check-websocket.sh "$t/squashfs-root/usr/bin/moonsprout"
       - uses: actions/upload-artifact@v4
         with:
           name: linux

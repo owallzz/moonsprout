@@ -41,6 +41,10 @@ add dawn packaging/licenses/dawn.txt "WebGPU implementation"
 add nod packaging/licenses/nod.txt "disc image reader"
 add directx-shader-compiler packaging/licenses/directx-shader-compiler.txt "shader compiler used by Dawn on Windows"
 add musl-libm port/libm/COPYRIGHT "math functions (port/libm)"
+# Linux builds with the vendored libcurl link OpenSSL statically (CMakeLists.txt, OPENSSL_USE_STATIC_LIBS).
+if grep -q '^OPENSSL_SSL_LIBRARY:FILEPATH=.*\.a$' "$build/CMakeCache.txt" 2>/dev/null; then
+    add openssl packaging/licenses/openssl.txt "TLS for the lobby connection (libssl, libcrypto)"
+fi
 for f in port/launcher/res/fonts/licenses/*; do
     n=$(basename "$f"); n=${n%.txt}
     add "font-$n" "$f" "launcher font"
