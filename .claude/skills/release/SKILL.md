@@ -119,7 +119,23 @@ Then:
      timeout 40 xvfb-run -n 93 -s "-screen 0 1280x720x24" bash -c \
      "$T/Moonsprout/moonsprout & sleep 20; magick import -window root $T/shot.png; kill %1"
    ```
-4. Check that no file contains game data: they're built from this repository, which has none, but
+4. Check that both Linux packages really reach the online lobby. A start menu that renders proves
+   nothing about online play: v0.1.0-rc.3 rendered fine but its lobby client had no WebSocket
+   backend. First `tools/release/check-websocket.sh` on the tarball's `moonsprout` and on the
+   AppImage's (`<AppImage> --appimage-extract usr/bin/moonsprout`). Then, if the user has a disc
+   image, host a lobby on the official server from each package, with a throwaway home whose
+   `.local/share/mppm/config.json` sets `backend.discPath`, `interface.presetChosen: true` and
+   `online.serverUrl` (a command-line host waits for the game to boot, so it needs the disc):
+
+   ```bash
+   env -u WAYLAND_DISPLAY HOME="$T/home" XDG_DATA_HOME="$T/home/.local/share" MPPM_SKIP_LAUNCHER=1 \
+     SDL_VIDEODRIVER=x11 SDL_AUDIODRIVER=dummy timeout 90 xvfb-run -a -s "-screen 0 1280x720x24" \
+     "$T/Moonsprout/moonsprout" --host --code-file "$T/code"
+   ```
+
+   It passes when the log shows `mppm: lobby: created session XXXX-XXXX` (the server's answer over
+   `wss://…/v1/ws`) and `$T/code` holds the code; stop the game then. `failed: unreachable` fails.
+5. Check that no file contains game data: they're built from this repository, which has none, but
    make sure nothing unexpected was packed in. `tar tzf` and `unzip -l` should list only the
    program, `res/` (the launcher's own fonts, images and stylesheets), the DLLs next to the
    program on Windows, the license files and `README.txt`.
@@ -137,6 +153,7 @@ smoke-tested under Wine (the `org.winehq.Wine` flatpak, headless under `xvfb-run
 |---|---|
 | `.github/workflows/release.yml` | The workflow: one job for the version, one build per platform, one job that publishes |
 | `tools/release/package-linux.sh` | AppImage (linuxdeploy) and portable tar.gz |
+| `tools/release/check-websocket.sh` | Fails unless a Linux binary has libcurl's WebSocket API (online lobby); run by CI and the release |
 | `tools/release/package-windows.ps1` | Inno Setup installer and portable zip (with `portable.txt`) |
 | `tools/release/package-macos.sh` | `Moonsprout.app` in a dmg (ad-hoc signed, not notarized) |
 | `tools/release/notes.sh` | The release notes, with download links first |
